@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tostcu Ümit · Yönetim</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f1f3ee;--card:#fff;--ink:#1c2a22;--mut:#66746b;--acc:#f0a81c;--line:#d5dbd2;--new:#c8392b}
+@media(prefers-color-scheme:dark){:root{--bg:#141c17;--card:#1f2b24;--ink:#eef2ea;--mut:#9fb0a5;--line:#34443a;--new:#ff7a6b}}
+*{box-sizing:border-box}
+body{margin:0;font:16px 'Bricolage Grotesque',system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+.w{padding:14px 16px}h1{margin:0;font-size:26px;font-weight:800}
+input,textarea,button{font:inherit}
+input{width:100%;padding:12px;margin:5px 0;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+button{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:10px 14px;border-radius:8px}
+.p{background:var(--acc);border-color:var(--acc);color:#1c2a22;font-weight:600}
+nav{display:flex;gap:8px;padding:0 16px}nav button{flex:1}nav .on{background:var(--ink);color:var(--bg)}
+.o,.m{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin:10px 0}
+.o.Yeni{border:2px solid var(--new)}
+.top{display:flex;justify-content:space-between;align-items:center}
+.st{font-weight:600}.Yeni .st{color:var(--new)}
+.mut{color:var(--mut)}a{color:inherit}
+.acts{display:flex;gap:8px;margin-top:10px}.acts .p{flex:1}
+</style></head><body>
+<div id="login" class="w"><h1>Yönetim girişi</h1>
+<input id="em" type="email" placeholder="E-posta" autocomplete="username"><input id="pw" type="password" placeholder="Şifre" autocomplete="current-password">
+<button class="p" id="go" style="width:100%;margin-top:8px">Giriş yap</button><p id="err" class="mut"></p></div>
+<div id="app" hidden>
+<div class="w top"><h1>Siparişler</h1><button id="en">🔔 Bildirimi aç</button></div>
+<nav><button data-t="o" class="on">Siparişler</button><button data-t="m">Menü</button></nav>
+<div class="w" id="o"></div>
+<div class="w" id="m" hidden>
+<div class="m"><b>Ürün ekle</b><input id="n1" placeholder="Ürün adı"><input id="n2" type="number" inputmode="decimal" placeholder="Fiyat (₺)"><input id="n3" placeholder="Kategori (ör. Tostlar)"><input id="n4" placeholder="Açıklama"><input id="n5" placeholder="Fotoğraf linki (isteğe bağlı)"><button class="p" id="add" style="width:100%;margin-top:6px">Ürünü kaydet</button></div>
+<div id="ml"></div></div></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// index.html'deki ayarların aynısı
+const CFG={apiKey:"AIzaSyBJ6ZkJ5A60wbCIQr4iQBSIZuEP_TwhhDo",authDomain:"tostcu-umit.firebaseapp.com",projectId:"tostcu-umit"};
+firebase.initializeApp(CFG);const db=firebase.firestore(),auth=firebase.auth();
+const $=s=>document.querySelector(s);
+const esc=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const TL=n=>Number(n).toLocaleString('tr-TR')+' ₺';
+const NEXT={Yeni:'Hazırlanıyor',Hazırlanıyor:'Yolda',Yolda:'Teslim edildi'};
+let orders=[],menu=[],ac=null,started=false,first=true;
+$('#go').onclick=()=>auth.signInWithEmailAndPassword($('#em').value,$('#pw').value).catch(()=>$('#err').textContent='E-posta veya şifre hatalı.');
+auth.onAuthStateChanged(u=>{$('#login').hidden=!!u;$('#app').hidden=!u;if(u&&!started){started=true;start()}});
+function start(){
+  db.collection('orders').orderBy('zaman','desc').limit(60).onSnapshot(s=>{
+    if(!first&&s.docChanges().some(c=>c.type=='added'&&!c.doc.metadata.hasPendingWrites)){beep();navigator.vibrate?.([300,150,300])}
+    first=false;orders=s.docs.map(d=>({id:d.id,...d.data()}));drawO()});
+  db.collection('menu').onSnapshot(s=>{menu=s.docs.map(d=>({id:d.id,...d.data()}));drawM()});
+  setInterval(()=>{if(orders.some(o=>o.durum=='Yeni'))beep()},8000);
+}
+function beep(){if(!ac)return;[0,.25].forEach(t=>{const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=880;g.gain.value=.4;o.connect(g);g.connect(ac.destination);o.start(ac.currentTime+t);o.stop(ac.currentTime+t+.18)})}
+$('#en').onclick=async()=>{
+  ac=ac||new (window.AudioContext||window.webkitAudioContext)();await ac.resume();beep();
+  try{await navigator.wakeLock?.request('screen')}catch(e){}
+  $('#en').textContent='🔔 Açık';
+};
+function drawO(){
+  document.title=(orders.filter(o=>o.durum=='Yeni').length?'('+orders.filter(o=>o.durum=='Yeni').length+') ':'')+'Tostcu Ümit · Yönetim';
+  $('#o').innerHTML=orders.map(o=>{
+    const t=o.zaman?.toDate?.().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})||'';
+    const n=NEXT[o.durum];
+    return `<div class="o ${esc(o.durum)}"><div class="top"><b>#${o.id.slice(-5).toUpperCase()} · ${t}</b><span class="st">${esc(o.durum)}</span></div>
+    <div>${esc(o.ad)} · <a href="tel:${esc(o.tel)}">${esc(o.tel)}</a></div><div class="mut">${esc(o.adres)}</div>
+    <div style="margin-top:6px">${(o.items||[]).map(i=>`${i.adet}× ${esc(i.ad)}`).join('<br>')}</div>
+    ${o.not?`<div class="mut">Not: ${esc(o.not)}</div>`:''}
+    <div class="top" style="margin-top:6px"><b>${TL(o.toplam)}</b><span class="mut">${esc(o.odeme)}</span></div>
+    ${n?`<div class="acts"><button class="p" data-s="${o.id}|${n}">${n==='Hazırlanıyor'?'Siparişi kabul et':n==='Yolda'?'Yola çıktı':'Teslim edildi'}</button><button data-s="${o.id}|İptal">İptal</button></div>`:''}</div>`}).join('')||'<p class="mut">Henüz sipariş yok.</p>';
+}
+function drawM(){
+  $('#ml').innerHTML=menu.map(m=>`<div class="m"><div class="top"><b>${esc(m.ad)}</b><span>${TL(m.fiyat)}</span></div><div class="mut">${esc(m.kategori)} · ${m.aktif===false?'Satışta değil':'Satışta'}</div>
+  <div class="acts"><button data-p="${m.id}">Fiyat</button><button data-v="${m.id}">${m.aktif===false?'Satışa aç':'Bugün yok'}</button><button data-d="${m.id}">Sil</button></div></div>`).join('');
+}
+$('#add').onclick=async()=>{
+  const ad=$('#n1').value.trim(),fiyat=parseFloat($('#n2').value);
+  if(!ad||isNaN(fiyat)){alert('Ürün adı ve fiyat gerekli.');return}
+  await db.collection('menu').add({ad,fiyat,kategori:$('#n3').value.trim()||'Diğer',aciklama:$('#n4').value.trim(),foto:$('#n5').value.trim(),aktif:true,sira:Date.now()});
+  ['n1','n2','n4','n5'].forEach(i=>$('#'+i).value='');
+};
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('[data-t],[data-s],[data-p],[data-v],[data-d]');if(!t)return;const d=t.dataset;
+  if(d.t){document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b===t));$('#o').hidden=d.t!='o';$('#m').hidden=d.t!='m'}
+  else if(d.s){const[id,st]=d.s.split('|');if(st=='İptal'&&!confirm('Sipariş iptal edilsin mi?'))return;db.collection('orders').doc(id).update({durum:st})}
+  else if(d.p){const m=menu.find(x=>x.id==d.p),v=parseFloat(prompt('Yeni fiyat (₺)',m.fiyat));if(!isNaN(v))db.collection('menu').doc(d.p).update({fiyat:v})}
+  else if(d.v){const m=menu.find(x=>x.id==d.v);db.collection('menu').doc(d.v).update({aktif:m.aktif===false})}
+  else if(d.d&&confirm('Ürün silinsin mi?'))db.collection('menu').doc(d.d).delete();
+});
+</script></body></html>
