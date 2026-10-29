@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tostcu Ümit · Personel girişi</title>
+<meta name="theme-color" content="#1f1710">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4efe6;--card:#fff;--ink:#2e2118;--mut:#7a6a5a;--acc:#c0392b;--line:#ddd2c2}
+@media(prefers-color-scheme:dark){:root{--bg:#17110c;--card:#241b14;--ink:#f1e6d4;--mut:#b5a48e;--acc:#e0584a;--line:#40342a}}
+*{box-sizing:border-box}
+body{margin:0;font:16px 'Bricolage Grotesque',system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+.w{max-width:420px;margin:0 auto;padding:8vh 20px 20px;text-align:center}
+h1{margin:12px 0 0;font-size:28px;font-weight:800}.mut{color:var(--mut)}
+img{width:96px;height:96px;border-radius:50%;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+input,button{font:inherit}input{width:100%;padding:14px;margin:5px 0;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink)}
+button{width:100%;margin-top:8px;padding:14px;border-radius:999px;border:0;background:var(--acc);color:#fff;font-weight:600}
+#err{min-height:24px;color:var(--acc)}
+</style></head><body>
+<div class="w">
+<img src="icon-192-1.png" alt="Tostcu Ümit">
+<h1>Tostcu Ümit</h1><p class="mut">Personel girişi</p>
+<input id="u" placeholder="Kullanıcı adı veya e-posta" autocomplete="username" autocapitalize="none">
+<input id="pw" type="password" placeholder="Şifre" autocomplete="current-password">
+<button id="go">Giriş yap</button>
+<p id="err"></p>
+<p class="mut" style="font-size:14px">Yönetici e-postasıyla, kasiyer kullanıcı adıyla girer. Doğru sayfa otomatik açılır.</p>
+</div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+const CFG={apiKey:"AIzaSyBJ6ZkJ5A60wbCIQr4iQBSIZuEP_TwhhDo",authDomain:"tostcu-umit.firebaseapp.com",projectId:"tostcu-umit"};
+firebase.initializeApp(CFG);const auth=firebase.auth(),db=firebase.firestore();
+const $=s=>document.querySelector(s),msg=t=>$('#err').textContent=t;
+if(new URLSearchParams(location.search).get('h')=='pasif')msg('Hesabın aktif değil veya kasiyer kaydın bulunamadı. Yöneticiyle görüş.');
+async function login(){
+  const id=$('#u').value.trim(),pw=$('#pw').value;
+  if(!id||!pw){msg('Kullanıcı adı ve şifre gerekli.');return}
+  const email=id.includes('@')?id:id.toLowerCase().replace(/[^a-z0-9]/g,'')+'@kasa.tostcu';
+  msg('Giriş yapılıyor…');
+  try{await auth.signInWithEmailAndPassword(email,pw)}
+  catch(e){msg(({'auth/network-request-failed':'İnternet bağlantısı yok.','auth/too-many-requests':'Çok fazla deneme yapıldı, biraz bekle.'})[e.code]||(['auth/invalid-credential','auth/wrong-password','auth/user-not-found','auth/invalid-email'].includes(e.code)?'Kullanıcı adı veya şifre hatalı.':'Giriş yapılamadı: '+e.code))}
+}
+$('#go').onclick=login;$('#pw').onkeydown=e=>{if(e.key=='Enter')login()};
+auth.onAuthStateChanged(async u=>{
+  if(!u)return;
+  if(!u.email.endsWith('@kasa.tostcu')){location.replace('admin.html');return}
+  try{
+    const d=await db.collection('kasiyer').doc(u.uid).get();
+    if(!d.exists||d.data().aktif===false){await auth.signOut();msg(d.exists?'Hesabın pasif. Yöneticiyle görüş.':'Kasiyer kaydın bulunamadı. Yönetici, Kasiyerler sekmesinden hesabı yeniden eklemeli.');return}
+    location.replace('kasa.html');
+  }catch(e){await auth.signOut();msg('Kasiyer bilgisi okunamadı. Firestore kurallarını güncelle (kasiyer).')}
+});
+</script></body></html>
